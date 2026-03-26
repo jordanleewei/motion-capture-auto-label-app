@@ -1,0 +1,14 @@
+# Dependencies / editor state
+node_modules/
+.cursor/
+.idea/
+.vscode/
+dist/
+
+# Local datasets can be very large
+data/**/*.tsv
+tol_*.json
+
+# OS junk
+.DS_Store
+

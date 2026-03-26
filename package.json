@@ -1,0 +1,11 @@
+{
+  "name": "motion-capture-auto-label-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "restart": "bash restart-server.sh",
+    "test-api": "node test-api.mjs",
+    "track-bench": "node track-benchmark.mjs"
+  }
+}

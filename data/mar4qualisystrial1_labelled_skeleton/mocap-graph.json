@@ -1,0 +1,633 @@
+{
+  "schema": "mocap-rigid-graph-v2",
+  "units": "mm",
+  "toleranceMm": 5,
+  "sourceDataset": "mar4qualisystrial1.tsv",
+  "baselineFrameIndex": 567,
+  "baselineFileFrame": 568,
+  "baselineTimeSec": 2.835,
+  "markerRigidGroupByBaselineIndex": {
+    "0": 1,
+    "1": 1,
+    "2": 3,
+    "3": 3,
+    "4": 3,
+    "5": 2,
+    "6": 2,
+    "7": 2,
+    "8": 5,
+    "9": 5,
+    "10": 8,
+    "11": 8,
+    "12": 9,
+    "13": 4,
+    "14": 4,
+    "15": 6,
+    "16": 6,
+    "17": 7,
+    "18": 1,
+    "19": 1,
+    "20": 10,
+    "21": 10,
+    "22": 10,
+    "23": 11,
+    "24": 11,
+    "25": 12,
+    "26": 12,
+    "27": 13,
+    "28": 13,
+    "29": 13,
+    "30": 14,
+    "31": 14,
+    "32": 14,
+    "33": 15,
+    "34": 15,
+    "35": 15,
+    "36": 16,
+    "37": 16,
+    "38": 16
+  },
+  "rigidBodies": [
+    {
+      "id": 1,
+      "baselinePointIndices": [
+        0,
+        1,
+        18,
+        19
+      ]
+    },
+    {
+      "id": 2,
+      "baselinePointIndices": [
+        5,
+        6,
+        7
+      ]
+    },
+    {
+      "id": 3,
+      "baselinePointIndices": [
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "id": 4,
+      "baselinePointIndices": [
+        13,
+        14
+      ]
+    },
+    {
+      "id": 5,
+      "baselinePointIndices": [
+        8,
+        9
+      ]
+    },
+    {
+      "id": 6,
+      "baselinePointIndices": [
+        15,
+        16
+      ]
+    },
+    {
+      "id": 7,
+      "baselinePointIndices": [
+        17
+      ]
+    },
+    {
+      "id": 8,
+      "baselinePointIndices": [
+        10,
+        11
+      ]
+    },
+    {
+      "id": 9,
+      "baselinePointIndices": [
+        12
+      ]
+    },
+    {
+      "id": 10,
+      "baselinePointIndices": [
+        20,
+        21,
+        22
+      ]
+    },
+    {
+      "id": 11,
+      "baselinePointIndices": [
+        23,
+        24
+      ]
+    },
+    {
+      "id": 12,
+      "baselinePointIndices": [
+        25,
+        26
+      ]
+    },
+    {
+      "id": 13,
+      "baselinePointIndices": [
+        27,
+        28,
+        29
+      ]
+    },
+    {
+      "id": 14,
+      "baselinePointIndices": [
+        30,
+        31,
+        32
+      ]
+    },
+    {
+      "id": 15,
+      "baselinePointIndices": [
+        33,
+        34,
+        35
+      ]
+    },
+    {
+      "id": 16,
+      "baselinePointIndices": [
+        36,
+        37,
+        38
+      ]
+    }
+  ],
+  "rigidInternalEdges": [
+    {
+      "rigidBodyId": 1,
+      "fromIndex": 0,
+      "toIndex": 1,
+      "baselineLengthMm": 141.6426647377124
+    },
+    {
+      "rigidBodyId": 1,
+      "fromIndex": 0,
+      "toIndex": 18,
+      "baselineLengthMm": 281.87718207226357
+    },
+    {
+      "rigidBodyId": 1,
+      "fromIndex": 0,
+      "toIndex": 19,
+      "baselineLengthMm": 296.98706357179924
+    },
+    {
+      "rigidBodyId": 1,
+      "fromIndex": 1,
+      "toIndex": 18,
+      "baselineLengthMm": 163.2085336402482
+    },
+    {
+      "rigidBodyId": 1,
+      "fromIndex": 1,
+      "toIndex": 19,
+      "baselineLengthMm": 295.74940752434304
+    },
+    {
+      "rigidBodyId": 1,
+      "fromIndex": 18,
+      "toIndex": 19,
+      "baselineLengthMm": 254.96412306440288
+    },
+    {
+      "rigidBodyId": 2,
+      "fromIndex": 5,
+      "toIndex": 6,
+      "baselineLengthMm": 126.15936978282677
+    },
+    {
+      "rigidBodyId": 2,
+      "fromIndex": 5,
+      "toIndex": 7,
+      "baselineLengthMm": 76.81989201372265
+    },
+    {
+      "rigidBodyId": 2,
+      "fromIndex": 6,
+      "toIndex": 7,
+      "baselineLengthMm": 74.48479885855909
+    },
+    {
+      "rigidBodyId": 3,
+      "fromIndex": 2,
+      "toIndex": 3,
+      "baselineLengthMm": 111.0480537560205
+    },
+    {
+      "rigidBodyId": 3,
+      "fromIndex": 2,
+      "toIndex": 4,
+      "baselineLengthMm": 62.02648303748984
+    },
+    {
+      "rigidBodyId": 3,
+      "fromIndex": 3,
+      "toIndex": 4,
+      "baselineLengthMm": 68.87589166754944
+    },
+    {
+      "rigidBodyId": 4,
+      "fromIndex": 13,
+      "toIndex": 14,
+      "baselineLengthMm": 69.6229892492415
+    },
+    {
+      "rigidBodyId": 5,
+      "fromIndex": 8,
+      "toIndex": 9,
+      "baselineLengthMm": 71.77538582968397
+    },
+    {
+      "rigidBodyId": 6,
+      "fromIndex": 15,
+      "toIndex": 16,
+      "baselineLengthMm": 69.88653177115035
+    },
+    {
+      "rigidBodyId": 8,
+      "fromIndex": 10,
+      "toIndex": 11,
+      "baselineLengthMm": 52.5781997219379
+    },
+    {
+      "rigidBodyId": 10,
+      "fromIndex": 20,
+      "toIndex": 21,
+      "baselineLengthMm": 276.0094571242079
+    },
+    {
+      "rigidBodyId": 10,
+      "fromIndex": 20,
+      "toIndex": 22,
+      "baselineLengthMm": 178.6082020205119
+    },
+    {
+      "rigidBodyId": 10,
+      "fromIndex": 21,
+      "toIndex": 22,
+      "baselineLengthMm": 204.68963783494266
+    },
+    {
+      "rigidBodyId": 11,
+      "fromIndex": 23,
+      "toIndex": 24,
+      "baselineLengthMm": 121.33780210223031
+    },
+    {
+      "rigidBodyId": 12,
+      "fromIndex": 25,
+      "toIndex": 26,
+      "baselineLengthMm": 121.98147911056006
+    },
+    {
+      "rigidBodyId": 13,
+      "fromIndex": 27,
+      "toIndex": 28,
+      "baselineLengthMm": 94.91627793482
+    },
+    {
+      "rigidBodyId": 13,
+      "fromIndex": 27,
+      "toIndex": 29,
+      "baselineLengthMm": 72.25700509293186
+    },
+    {
+      "rigidBodyId": 13,
+      "fromIndex": 28,
+      "toIndex": 29,
+      "baselineLengthMm": 101.88129504477249
+    },
+    {
+      "rigidBodyId": 14,
+      "fromIndex": 30,
+      "toIndex": 31,
+      "baselineLengthMm": 120.92326099225079
+    },
+    {
+      "rigidBodyId": 14,
+      "fromIndex": 30,
+      "toIndex": 32,
+      "baselineLengthMm": 85.43876926196914
+    },
+    {
+      "rigidBodyId": 14,
+      "fromIndex": 31,
+      "toIndex": 32,
+      "baselineLengthMm": 75.04699944701316
+    },
+    {
+      "rigidBodyId": 15,
+      "fromIndex": 33,
+      "toIndex": 34,
+      "baselineLengthMm": 75.66601354637366
+    },
+    {
+      "rigidBodyId": 15,
+      "fromIndex": 33,
+      "toIndex": 35,
+      "baselineLengthMm": 94.35278835307412
+    },
+    {
+      "rigidBodyId": 15,
+      "fromIndex": 34,
+      "toIndex": 35,
+      "baselineLengthMm": 89.55634302493596
+    },
+    {
+      "rigidBodyId": 16,
+      "fromIndex": 36,
+      "toIndex": 37,
+      "baselineLengthMm": 97.27324019996458
+    },
+    {
+      "rigidBodyId": 16,
+      "fromIndex": 36,
+      "toIndex": 38,
+      "baselineLengthMm": 73.6471872782661
+    },
+    {
+      "rigidBodyId": 16,
+      "fromIndex": 37,
+      "toIndex": 38,
+      "baselineLengthMm": 88.95965378192516
+    }
+  ],
+  "segmentEdgesBetweenRigidBodies": [
+    {
+      "groupA": 6,
+      "groupB": 7
+    },
+    {
+      "groupA": 4,
+      "groupB": 6
+    },
+    {
+      "groupA": 2,
+      "groupB": 4
+    },
+    {
+      "groupA": 1,
+      "groupB": 2
+    },
+    {
+      "groupA": 1,
+      "groupB": 3
+    },
+    {
+      "groupA": 3,
+      "groupB": 5
+    },
+    {
+      "groupA": 5,
+      "groupB": 8
+    },
+    {
+      "groupA": 1,
+      "groupB": 10
+    },
+    {
+      "groupA": 10,
+      "groupB": 11
+    },
+    {
+      "groupA": 10,
+      "groupB": 12
+    },
+    {
+      "groupA": 11,
+      "groupB": 13
+    },
+    {
+      "groupA": 13,
+      "groupB": 14
+    },
+    {
+      "groupA": 12,
+      "groupB": 15
+    },
+    {
+      "groupA": 15,
+      "groupB": 16
+    }
+  ],
+  "segmentEdgesDetailed": [
+    {
+      "groupA": 6,
+      "groupB": 7,
+      "crossMarkerPairCount": 2,
+      "baselineCrossDistancesMm": [
+        95.76450881720216,
+        86.23148899329058
+      ]
+    },
+    {
+      "groupA": 4,
+      "groupB": 6,
+      "crossMarkerPairCount": 4,
+      "baselineCrossDistancesMm": [
+        285.59313809333725,
+        276.4673230474083,
+        292.5807864676011,
+        293.429252974205
+      ]
+    },
+    {
+      "groupA": 2,
+      "groupB": 4,
+      "crossMarkerPairCount": 6,
+      "baselineCrossDistancesMm": [
+        306.960442212022,
+        317.19787690809045,
+        290.8639057067755,
+        277.93926347135624,
+        310.0206959381906,
+        313.17908203773766
+      ]
+    },
+    {
+      "groupA": 1,
+      "groupB": 2,
+      "crossMarkerPairCount": 12,
+      "baselineCrossDistancesMm": [
+        199.30775869744755,
+        226.16648965087649,
+        210.53449489335472,
+        241.9035532045778,
+        187.82528325281456,
+        218.8288067371387,
+        304.9506305584563,
+        220.23715763240318,
+        284.99682157701346,
+        298.38032579578703,
+        316.2049138991992,
+        340.97752727855834
+      ]
+    },
+    {
+      "groupA": 1,
+      "groupB": 3,
+      "crossMarkerPairCount": 12,
+      "baselineCrossDistancesMm": [
+        229.77866768262018,
+        241.14895948562585,
+        235.40600040355807,
+        241.44798944700287,
+        187.3363330563508,
+        222.41083360753805,
+        316.2517179731994,
+        245.82614884914094,
+        304.2429315415562,
+        304.89799914561587,
+        323.52500395487203,
+        341.5818161685425
+      ]
+    },
+    {
+      "groupA": 3,
+      "groupB": 5,
+      "crossMarkerPairCount": 6,
+      "baselineCrossDistancesMm": [
+        298.96055697198585,
+        312.8553782085263,
+        289.90557381671704,
+        290.45814418776416,
+        302.2019315308889,
+        316.1850296108279
+      ]
+    },
+    {
+      "groupA": 5,
+      "groupB": 8,
+      "crossMarkerPairCount": 4,
+      "baselineCrossDistancesMm": [
+        268.1811030124978,
+        252.66506263233148,
+        275.8280579817796,
+        271.01653435906815
+      ]
+    },
+    {
+      "groupA": 1,
+      "groupB": 10,
+      "crossMarkerPairCount": 12,
+      "baselineCrossDistancesMm": [
+        527.0831897433269,
+        565.45735837108,
+        560.4856813309327,
+        471.6564069722789,
+        480.3112970210049,
+        463.6174279004187,
+        355.61905057097255,
+        325.9593672975206,
+        313.56644647665973,
+        271.20904352362595,
+        353.78672774003275,
+        362.43319511049214
+      ]
+    },
+    {
+      "groupA": 10,
+      "groupB": 11,
+      "crossMarkerPairCount": 6,
+      "baselineCrossDistancesMm": [
+        577.65008538128,
+        593.9008818329874,
+        537.762686393357,
+        519.5142844446146,
+        555.802734471503,
+        580.5433801336469
+      ]
+    },
+    {
+      "groupA": 10,
+      "groupB": 12,
+      "crossMarkerPairCount": 6,
+      "baselineCrossDistancesMm": [
+        545.48385464008,
+        543.3093185515963,
+        542.1871098237212,
+        486.98584963117764,
+        475.60086203664525,
+        467.98386548683493
+      ]
+    },
+    {
+      "groupA": 11,
+      "groupB": 13,
+      "crossMarkerPairCount": 6,
+      "baselineCrossDistancesMm": [
+        449.037093226161,
+        419.76878457789115,
+        485.5563088561408,
+        462.9802569332736,
+        457.72944476076697,
+        509.98198276115596
+      ]
+    },
+    {
+      "groupA": 13,
+      "groupB": 14,
+      "crossMarkerPairCount": 9,
+      "baselineCrossDistancesMm": [
+        151.87581582332336,
+        188.59560916680974,
+        206.10686793263355,
+        183.19413952689652,
+        152.4475495834552,
+        199.0501837426935,
+        210.50160992495998,
+        225.06808618282602,
+        259.517459528256
+      ]
+    },
+    {
+      "groupA": 12,
+      "groupB": 15,
+      "crossMarkerPairCount": 6,
+      "baselineCrossDistancesMm": [
+        498.810894048035,
+        465.5607837640537,
+        463.9442534734103,
+        501.03032390764537,
+        481.7928655355951,
+        459.2206139809057
+      ]
+    },
+    {
+      "groupA": 15,
+      "groupB": 16,
+      "crossMarkerPairCount": 9,
+      "baselineCrossDistancesMm": [
+        209.59487982772865,
+        183.4381326905614,
+        253.17212542458142,
+        166.40061723443216,
+        121.91907071086129,
+        193.28563401867189,
+        139.64758870814782,
+        154.11406789453065,
+        194.18252132980456
+      ]
+    }
+  ],
+  "notes": {
+    "colours": "UI: unlabelled red, labelled white; orange = within-RB; blue = segment between RBs.",
+    "hotkeys": "Q–P → groups 1–10; A–L → 11–19. Press 1 twice on two RBs to add a blue segment (all cross pairs)."
+  }
+}

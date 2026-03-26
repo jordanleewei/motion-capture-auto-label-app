@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MoCap graph labelling</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <header class="app-header">
+      <span class="app-brand">MoCap labeller</span>
+      <nav class="top-tablist" role="tablist" aria-label="Main">
+        <button type="button" class="tab active" data-tab="label" role="tab" aria-selected="true">Label</button>
+        <button type="button" class="tab" data-tab="track" role="tab" aria-selected="false">Track</button>
+        <button type="button" class="tab" data-tab="live" role="tab" aria-selected="false">Live motion</button>
+      </nav>
+    </header>
+
+    <div class="layout">
+      <aside class="sidebar">
+        <div>
+          <h2>Data</h2>
+          <div class="panel-block">
+            <label for="dataset-select">Dataset (<code>data/</code>)</label>
+            <select id="dataset-select">
+              <option value="">— choose —</option>
+            </select>
+            <div class="button-row" style="margin-top: 8px">
+              <button type="button" id="btn-refresh-datasets">Refresh dataset list</button>
+            </div>
+            <label for="local-tsv" style="margin-top: 10px">Load local TSV</label>
+            <input id="local-tsv" type="file" accept=".tsv,.txt" />
+            <p class="hint" style="margin-top: 8px">
+              Trailing <code>0,0,0</code> padding is stripped. Dropdown lists <code>data/</code> when you open this page at
+              <code>http://127.0.0.1:8765/</code> (<code>npm start</code>). Use “Load local TSV” if you opened the HTML
+              as a file.
+            </p>
+          </div>
+        </div>
+
+        <div>
+          <h2>Window</h2>
+          <div class="panel-block">
+            <label for="max-seconds">Load first seconds (label / preview window)</label>
+            <input id="max-seconds" type="number" value="10" min="1" max="7200" step="1" />
+            <label for="max-frames" style="margin-top: 8px">Or cap rows (0 = no cap within seconds above)</label>
+            <input id="max-frames" type="number" value="0" min="0" max="500000" step="1" />
+            <p class="hint" style="margin-top: 8px">
+              <strong>Run tracker</strong> always reloads the <strong>entire TSV</strong> (no second/frame cap) from the server or your last picked file, so tracking uses every row.
+            </p>
+          </div>
+        </div>
+
+        <div id="panel-label" class="tab-panel" role="tabpanel">
+          <div>
+            <h2>Frame</h2>
+            <div class="panel-block">
+              <input id="frame-slider" type="range" min="0" max="0" value="0" disabled />
+              <div class="frame-readout" id="frame-readout">No file loaded</div>
+              <div class="button-row" style="margin-top: 8px">
+                <button type="button" id="btn-baseline" class="primary" disabled>Set baseline frame</button>
+              </div>
+              <p class="hint" style="margin-top: 8px">Rigid groups apply on the <strong>baseline</strong> frame.</p>
+            </div>
+          </div>
+
+          <div>
+            <h2>Hotkeys (hover marker, then key)</h2>
+            <div class="panel-block hotkeys">
+              <p class="hint">
+                Top row <kbd>Q</kbd>–<kbd>P</kbd> → rigid bodies <strong>1</strong>–<strong>10</strong>. Home row
+                <kbd>A</kbd>–<kbd>L</kbd> → <strong>11</strong>–<strong>19</strong>.
+              </p>
+              <ul class="key-map">
+                <li><kbd>Q</kbd>–<kbd>P</kbd>: groups 1–10</li>
+                <li><kbd>A</kbd>–<kbd>L</kbd>: groups 11–19</li>
+              </ul>
+              <p class="hint" style="margin-top: 8px">
+                <kbd>1</kbd> twice on two RBs → blue segment. <kbd>Esc</kbd> clears pending.
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <h2>Legend</h2>
+            <div class="panel-block">
+              <div class="legend">
+                <span class="unlabelled">Unlabelled</span>
+                <span class="labelled">Labelled</span>
+                <span class="edge-rigid">Rigid (in-group)</span>
+                <span class="edge-seg">Segment (joint)</span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h2>Summary</h2>
+            <div class="panel-block">
+              <div class="edge-list" id="group-summary">No labels yet.</div>
+              <label style="margin-top: 10px">Segment edges (rigid ↔ rigid)</label>
+              <div class="edge-list" id="segment-list">None.</div>
+              <div class="button-row" style="margin-top: 8px">
+                <button type="button" id="btn-clear-pending" disabled>Clear pending link</button>
+                <button type="button" id="btn-clear-labels" class="danger" disabled>Clear all labels</button>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h2>Save / load (text)</h2>
+            <div class="panel-block">
+              <p class="hint">
+                Scrub to the frame you want as <strong>baseline</strong>, label, then <strong>Copy</strong>. Paste the
+                block later and <strong>Apply</strong> (same dataset / point layout). First line is the
+                <strong>file frame #</strong> from the TSV, not the slider position.
+              </p>
+              <label for="progress-text">Progress text</label>
+              <textarea id="progress-text" rows="14" class="progress-textarea" placeholder="Frame 568&#10;RB 1: 4 marker(s) — [0, 1, …]&#10;…&#10;&#10;RB 1 ↔ RB 2"></textarea>
+              <div class="button-row" style="margin-top: 8px">
+                <button type="button" id="btn-copy-progress" disabled>Copy from current labels</button>
+                <button type="button" id="btn-apply-progress" disabled>Apply pasted text</button>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h2>Export</h2>
+            <div class="panel-block">
+              <label for="tolerance-mm">Tolerance ε (mm)</label>
+              <input id="tolerance-mm" type="number" value="15" min="0.1" max="500" step="0.5" />
+              <div class="button-row" style="margin-top: 8px">
+                <button type="button" id="btn-export" class="primary" disabled>Save graph</button>
+              </div>
+              <p class="hint" style="margin-top: 8px" id="save-path-hint"></p>
+            </div>
+          </div>
+        </div>
+
+        <div id="panel-track" class="tab-panel hidden" role="tabpanel" hidden>
+          <div>
+            <h2>Frame</h2>
+            <div class="panel-block">
+              <input id="frame-slider-track" type="range" min="0" max="0" value="0" disabled />
+              <div class="frame-readout" id="frame-readout-track">No file loaded</div>
+              <p class="hint" style="margin-top: 8px">
+                Scrub to inspect assignments. Baseline for the solver comes from
+                <code>mocap-graph.json</code> (<code>baselineFrameIndex</code>).
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <h2>Skeleton</h2>
+            <div class="panel-block">
+              <div class="edge-list" id="skeleton-status">No dataset selected.</div>
+              <div class="button-row" style="margin-top: 8px">
+                <button type="button" id="btn-reload-skeleton" disabled>Reload skeleton JSON</button>
+              </div>
+              <p class="hint" style="margin-top: 8px">
+                Expected: <code>data/&lt;stem&gt;_labelled_skeleton/mocap-graph.json</code> (same stem as the TSV).
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <h2>Tracker</h2>
+            <div class="panel-block">
+              <label for="track-reappear">Reappearance radius (mm)</label>
+              <input id="track-reappear" type="number" value="50" min="0.5" max="500" step="0.5" />
+              <label for="track-tolerance" style="margin-top: 8px">Tolerance (mm)</label>
+              <input id="track-tolerance" type="number" value="15" min="0.1" max="500" step="0.5" />
+              <label for="track-edge-audit-mm" style="margin-top: 8px">Edge audit threshold (mm)</label>
+              <input id="track-edge-audit-mm" type="number" value="100" min="1" max="500" step="1" />
+              <label for="track-edge-audit-every" style="margin-top: 8px">Edge audit every N frames</label>
+              <input id="track-edge-audit-every" type="number" value="1000" min="1" max="100000" step="1" />
+              <label for="track-playback-speed" style="margin-top: 8px">Playback speed (×)</label>
+              <input id="track-playback-speed" type="number" value="1" min="0.25" max="500" step="0.25" />
+              <div class="button-row" style="margin-top: 8px">
+                <button type="button" id="btn-run-tracker" class="primary" disabled>Run tracker</button>
+                <button type="button" id="btn-play-track" disabled>Play</button>
+              </div>
+              <p class="hint" style="margin-top: 6px">
+                <strong>Run tracker</strong> also starts <strong>Play</strong> immediately: the timeline scrubs while the solver
+                advances (yields every few frames so the UI stays responsive).
+              </p>
+              <p class="hint" style="margin-top: 8px">
+                The labelled <strong>baseline</strong> frame is seeded from the graph; the solver runs on <strong>all
+                other frames</strong> forward and backward. Set <strong>tolerance</strong>, <strong>edge audit</strong>,
+                and <strong>reappearance</strong> before <strong>Run tracker</strong>. Loading a skeleton updates
+                tolerance fields from the graph’s <code>toleranceMm</code> when present.
+              </p>
+              <div class="edge-list" id="track-stats" style="margin-top: 8px"></div>
+            </div>
+          </div>
+
+          <div id="track-report" class="track-report hidden" hidden>
+            <h2>Run report</h2>
+            <div class="panel-block">
+              <div class="track-report-summary" id="track-report-summary"></div>
+              <p class="hint" style="margin-top: 8px">
+                Aggregates exclude the baseline frame (100% by definition). Charts: full timeline; vertical line = baseline.
+              </p>
+              <div class="track-chart-wrap">
+                <div class="track-chart-label">Logical assignment rate (%)</div>
+                <canvas id="track-chart-rate" width="560" height="130"></canvas>
+              </div>
+              <div class="track-chart-wrap">
+                <div class="track-chart-label">Unassigned raw detections per frame</div>
+                <canvas id="track-chart-raw" width="560" height="110"></canvas>
+              </div>
+              <div class="track-chart-wrap">
+                <div class="track-chart-label">Missing logical markers per frame</div>
+                <canvas id="track-chart-miss" width="560" height="110"></canvas>
+              </div>
+              <label style="margin-top: 10px">Per-frame table</label>
+              <div class="track-report-table-wrap">
+                <table class="live-table track-report-table" id="track-per-frame-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Idx</th>
+                      <th scope="col">File #</th>
+                      <th scope="col">t (s)</th>
+                      <th scope="col">Baseline</th>
+                      <th scope="col">Match</th>
+                      <th scope="col">Miss</th>
+                      <th scope="col">Unas. raw</th>
+                      <th scope="col">Rate %</th>
+                    </tr>
+                  </thead>
+                  <tbody id="track-per-frame-tbody"></tbody>
+                </table>
+              </div>
+              <p class="hint" id="track-report-table-note" style="margin-top: 6px"></p>
+            </div>
+          </div>
+
+          <div>
+            <h2>Legend (track)</h2>
+            <div class="panel-block">
+              <div class="legend">
+                <span class="track-assigned">Assigned (by RB hue)</span>
+                <span class="track-raw">Unassigned detection</span>
+                <span class="edge-rigid">Rigid (in-group)</span>
+                <span class="edge-seg">Segment (joint)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="panel-live" class="tab-panel hidden" role="tabpanel" hidden>
+          <div>
+            <h2>Frame</h2>
+            <div class="panel-block">
+              <input id="frame-slider-live" type="range" min="0" max="0" value="0" disabled />
+              <div class="frame-readout" id="frame-readout-live">No file loaded</div>
+              <p class="hint" style="margin-top: 8px">
+                Skeleton uses saved <code>mocap-graph.json</code> and tracker assignments for this frame. Scrub to inspect
+                live state; table below lists logical vs raw markers.
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <h2>Tracker</h2>
+            <div class="panel-block">
+              <label for="track-reappear-live">Reappearance radius (mm)</label>
+              <input id="track-reappear-live" type="number" value="50" min="0.5" max="500" step="0.5" />
+              <label for="track-tolerance-live" style="margin-top: 8px">Tolerance (mm)</label>
+              <input id="track-tolerance-live" type="number" value="15" min="0.1" max="500" step="0.5" />
+              <label for="track-edge-audit-mm-live" style="margin-top: 8px">Edge audit threshold (mm)</label>
+              <input id="track-edge-audit-mm-live" type="number" value="100" min="1" max="500" step="1" />
+              <label for="track-edge-audit-every-live" style="margin-top: 8px">Edge audit every N frames</label>
+              <input id="track-edge-audit-every-live" type="number" value="1000" min="1" max="100000" step="1" />
+              <label for="track-playback-speed-live" style="margin-top: 8px">Playback speed (×)</label>
+              <input id="track-playback-speed-live" type="number" value="1" min="0.25" max="500" step="0.25" />
+              <div class="button-row" style="margin-top: 8px">
+                <button type="button" id="btn-run-live" class="primary" disabled>Run tracker</button>
+                <button type="button" id="btn-play-live" disabled>Play</button>
+              </div>
+              <p class="hint" style="margin-top: 8px">
+                Matches the Track tab solver. Run after loading data and skeleton, or open this tab to auto-run once.
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <h2>Legend</h2>
+            <div class="panel-block">
+              <div class="legend">
+                <span class="track-assigned">Assigned logical (RB hue)</span>
+                <span class="track-raw">Unassigned detection</span>
+                <span class="edge-rigid">Rigid (in-group)</span>
+                <span class="edge-seg">Segment (joint)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <main id="viewport" tabindex="0">
+        <div class="status-bar" id="status-bar">Choose a dataset from <code>data/</code> (run <code>npm start</code>).</div>
+      </main>
+    </div>
+
+    <div id="live-dock" class="live-dock hidden" hidden aria-label="Live assignment table">
+      <div class="live-dock-head">
+        <span class="live-dock-title" id="live-dock-title">Assignments</span>
+        <span class="live-dock-meta" id="live-dock-meta"></span>
+      </div>
+      <div class="live-dock-scroll">
+        <table class="live-table" id="live-assignment-table">
+          <thead>
+            <tr>
+              <th scope="col">Logical</th>
+              <th scope="col">RB</th>
+              <th scope="col">Hinge</th>
+              <th scope="col">Raw idx</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody id="live-assignment-tbody"></tbody>
+        </table>
+        <div class="live-unassigned" id="live-unassigned-block"></div>
+      </div>
+    </div>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
