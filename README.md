@@ -144,3 +144,25 @@ If you want to reproduce debugging behavior and visuals, share:
 - `web/index.html` (parameter controls/defaults),
 - the specific `data/<stem>_labelled_skeleton/mocap-graph.json` that defines the blue-edge constraints.
 
+## Testing steps
+
+1. Confirm the local server is running:
+   - `npm start`
+   - Open `http://127.0.0.1:8765/`
+2. Validate API endpoints quickly:
+   - `npm run test-api`
+3. Run backend benchmark on the main dataset:
+   - `npm run track-bench -- mar4qualisystrial1.tsv`
+4. In the browser app:
+   - Load dataset `mar4qualisystrial1.tsv`
+   - Load skeleton from `mar4qualisystrial1_labelled_skeleton/mocap-graph.json`
+   - Go to **Track** and set:
+     - `Reappearance radius (mm)`: `50`
+     - `Tolerance (mm)`: `15`
+     - `Edge audit threshold (mm)`: `100`
+     - `Edge audit every N frames`: `1000`
+   - Click **Run tracker**
+5. Verify behavior:
+   - Blue edges only appear for intended logical connections from the saved graph
+   - No full-skeleton flicker during playback/scrubbing
+
