@@ -33,7 +33,9 @@
 #
 # **Per-frame phases (same in both passes):**
 # 1. **Follow** — nearest unused raw point within `reappear_mm` of the reference position.
-# 2. **Fingerprint** — iteratively assign one graph marker at a time using orange/blue geometry.
+# 2. **Fingerprint** — iterative **Hungarian assignment** (`scipy.optimize.linear_sum_assignment`)
+#    on a cost matrix of worst-case geometric error vs placed neighbours (orange/blue distances
+#    and angles), repeated until no new feasible matches.
 # 3. **Rigid-body rescue** — if a whole body is empty and has ≥3 markers, match a raw triangle
 #    to baseline distances, then fingerprint again.
 #
@@ -62,6 +64,7 @@ from typing import Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.optimize import linear_sum_assignment
 
 plt.rcParams.update({
     "figure.figsize": (14, 4),
@@ -309,8 +312,9 @@ plt.show()
 # **Phase 1 — follow:** For each graph marker, if `reference_position_for_follow` returns a
 # position, find the closest unused raw point within `reappear_mm`.
 #
-# **Phase 2 — fingerprint:** Repeatedly collect `(graph marker i, raw r)` pairs that satisfy
-# constraints vs already-placed neighbours within `tolerance_mm`; assign the best one; repeat.
+# **Phase 2 — fingerprint:** Build a cost matrix for unassigned graph markers with at least one
+# placed neighbour vs unused raw points (`scipy.optimize.linear_sum_assignment`), accept matches
+# within `tolerance_mm`, repeat until fixed point.
 #
 # **Phase 3 — rigid-body rescue:** For each rigid group with **no** assignments yet and ≥3
 # markers, brute-force a raw triangle matching baseline distances for the first three indices;
@@ -336,6 +340,57 @@ class DiagnosticsPass:
     min_raw: float = float("inf")
     max_raw: int = 0
     sum_raw: int = 0
+
+
+BIG_COST = 1e12  # infeasible (marker, raw) pair for Hungarian
+
+
+def _compute_cost(
+    i: int,
+    r: int,
+    cur_pts: np.ndarray,
+    graph_marker_pos_local: list,
+    raw_index_for_graph_local: list,
+    orange_neighbors: list[list[DistConstraint]],
+    blue_neighbors: list[list[DistConstraint]],
+    orange_angles: list[list[AngleConstraint]],
+    tolerance_mm: float,
+) -> float:
+    """Worst constraint error for assigning graph marker ``i`` to raw ``r``, or ``BIG_COST``."""
+    max_err = 0.0
+    count = 0
+    for nb in orange_neighbors[i]:
+        if raw_index_for_graph_local[nb.j] is None:
+            continue
+        d = float(np.linalg.norm(cur_pts[r] - graph_marker_pos_local[nb.j]))
+        max_err = max(max_err, abs(d - nb.d0))
+        count += 1
+    for nb in blue_neighbors[i]:
+        if raw_index_for_graph_local[nb.j] is None:
+            continue
+        d = float(np.linalg.norm(cur_pts[r] - graph_marker_pos_local[nb.j]))
+        max_err = max(max_err, abs(d - nb.d0))
+        count += 1
+    for ang in orange_angles[i]:
+        if raw_index_for_graph_local[ang.j] is None or raw_index_for_graph_local[ang.k] is None:
+            continue
+        ref_j = graph_marker_pos_local[ang.j]
+        ref_k = graph_marker_pos_local[ang.k]
+        dp = float(np.linalg.norm(cur_pts[r] - ref_j))
+        dq = float(np.linalg.norm(cur_pts[r] - ref_k))
+        if dp > 0 and dq > 0:
+            vp = ref_j - cur_pts[r]
+            vq = ref_k - cur_pts[r]
+            cos_val = float(np.dot(vp, vq) / (dp * dq))
+            cos_val = max(-1.0, min(1.0, cos_val))
+            angle = math.acos(cos_val)
+            da = abs(angle - ang.angle0)
+            ea = da * ((ang.d0p + ang.d0q) / 2)
+            max_err = max(max_err, ea)
+            count += 1
+    if count == 0 or max_err > tolerance_mm:
+        return BIG_COST
+    return max_err
 
 
 def run_tracker(
@@ -424,60 +479,59 @@ def run_tracker(
                 used_raw.add(best_r)
         diag.bootstrap_total += bootstrap
 
-        # Phase 2: fingerprint — greedy one-assignment-per-outer-iteration until fixed point.
+        # Phase 2: fingerprint — iterative Hungarian until fixed point.
         def fingerprint_fill() -> None:
             progress = True
             while progress:
                 progress = False
-                candidates = []
+                free_markers = []
                 for i in range(num_graph_markers):
                     if raw_index_for_graph[i] is not None:
                         continue
-                    for r in range(n):
-                        if r in used_raw:
-                            continue
-                        max_err = 0.0
-                        count = 0
-                        for nb in orange_neighbors[i]:
-                            if raw_index_for_graph[nb.j] is None:
-                                continue
-                            d = float(np.linalg.norm(cur_pts[r] - graph_marker_pos[nb.j]))
-                            max_err = max(max_err, abs(d - nb.d0))
-                            count += 1
-                        for nb in blue_neighbors[i]:
-                            if raw_index_for_graph[nb.j] is None:
-                                continue
-                            d = float(np.linalg.norm(cur_pts[r] - graph_marker_pos[nb.j]))
-                            max_err = max(max_err, abs(d - nb.d0))
-                            count += 1
-                        for ang in orange_angles[i]:
-                            if raw_index_for_graph[ang.j] is None or raw_index_for_graph[ang.k] is None:
-                                continue
-                            ref_j = graph_marker_pos[ang.j]
-                            ref_k = graph_marker_pos[ang.k]
-                            dp = float(np.linalg.norm(cur_pts[r] - ref_j))
-                            dq = float(np.linalg.norm(cur_pts[r] - ref_k))
-                            if dp > 0 and dq > 0:
-                                vp = ref_j - cur_pts[r]
-                                vq = ref_k - cur_pts[r]
-                                cos_val = float(np.dot(vp, vq) / (dp * dq))
-                                cos_val = max(-1.0, min(1.0, cos_val))
-                                angle = math.acos(cos_val)
-                                da = abs(angle - ang.angle0)
-                                ea = da * ((ang.d0p + ang.d0q) / 2)
-                                max_err = max(max_err, ea)
-                                count += 1
-                        if count > 0 and max_err <= tolerance_mm:
-                            candidates.append((max_err, -count, i, r))
-                if candidates:
-                    candidates.sort()
-                    for _, _, ci, cr in candidates:
-                        if raw_index_for_graph[ci] is None and cr not in used_raw:
-                            raw_index_for_graph[ci] = cr
-                            graph_marker_pos[ci] = cur_pts[cr].copy()
-                            used_raw.add(cr)
-                            progress = True
+                    has_nbr = False
+                    for nb in orange_neighbors[i]:
+                        if raw_index_for_graph[nb.j] is not None:
+                            has_nbr = True
                             break
+                    if not has_nbr:
+                        for nb in blue_neighbors[i]:
+                            if raw_index_for_graph[nb.j] is not None:
+                                has_nbr = True
+                                break
+                    if not has_nbr:
+                        for ang in orange_angles[i]:
+                            if raw_index_for_graph[ang.j] is not None and raw_index_for_graph[ang.k] is not None:
+                                has_nbr = True
+                                break
+                    if has_nbr:
+                        free_markers.append(i)
+                if not free_markers:
+                    break
+                free_raws = [r for r in range(n) if r not in used_raw]
+                if not free_raws:
+                    break
+                nm = len(free_markers)
+                nr = len(free_raws)
+                cost = np.full((nm, nr), BIG_COST, dtype=np.float64)
+                for mi, i in enumerate(free_markers):
+                    for ri, r in enumerate(free_raws):
+                        cost[mi, ri] = _compute_cost(
+                            i, r, cur_pts, graph_marker_pos, raw_index_for_graph,
+                            orange_neighbors, blue_neighbors, orange_angles, tolerance_mm,
+                        )
+                row_ind, col_ind = linear_sum_assignment(cost)
+                assigned_this_round = 0
+                for mi, ri in zip(row_ind, col_ind):
+                    if cost[mi, ri] >= BIG_COST:
+                        continue
+                    i = free_markers[mi]
+                    r = free_raws[ri]
+                    raw_index_for_graph[i] = r
+                    graph_marker_pos[i] = cur_pts[r].copy()
+                    used_raw.add(r)
+                    assigned_this_round += 1
+                if assigned_this_round > 0:
+                    progress = True
 
         fingerprint_fill()
 

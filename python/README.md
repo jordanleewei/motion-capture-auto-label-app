@@ -1,6 +1,6 @@
 # Motion Capture Auto-Label — Python version
 
-A pure-Python reimplementation of the motion-capture marker auto-labelling tracker, designed for use in Jupyter notebooks.
+A pure-Python reimplementation of the motion-capture marker auto-labelling tracker, designed for use in Jupyter notebooks. The **fingerprint** phase uses **`scipy.optimize.linear_sum_assignment`** (Hungarian algorithm) on a cost matrix of worst-case geometric error vs already-placed neighbours, repeated until no new feasible matches.
 
 **Terminology**
 
@@ -61,7 +61,7 @@ Edit the constants near the top of the notebook:
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `REAPPEAR_MM` | 50 | Max distance (mm) to follow a marker from its last known position |
-| `TOLERANCE_MM` | 100 | Geometric constraint tolerance for fingerprint fill |
+| `TOLERANCE_MM` | 100 | Geometric constraint tolerance for fingerprint (Hungarian) fill |
 | `FOLLOW_LOOKBACK_FRAMES` | 10 | How many solved frames to search for last known position |
 | `EDGE_WARNING_THRESHOLD_MM` | 150 | Flag frames with mean edge error above this (mm) |
 | `MAX_FRAMES` | 0 | Limit frames for quick testing (0 = all) |
