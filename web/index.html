@@ -135,7 +135,7 @@
             <h2>Export</h2>
             <div class="panel-block">
               <label for="tolerance-mm">Tolerance ε (mm)</label>
-              <input id="tolerance-mm" type="number" value="15" min="0.1" max="500" step="0.5" />
+              <input id="tolerance-mm" type="number" value="100" min="0.1" max="500" step="0.5" />
               <div class="button-row" style="margin-top: 8px">
                 <button type="button" id="btn-export" class="primary" disabled>Save graph</button>
               </div>
@@ -173,16 +173,40 @@
           <div>
             <h2>Tracker</h2>
             <div class="panel-block">
-              <label for="track-reappear">Reappearance radius (mm)</label>
-              <input id="track-reappear" type="number" value="50" min="0.5" max="500" step="0.5" />
-              <label for="track-tolerance" style="margin-top: 8px">Tolerance (mm)</label>
-              <input id="track-tolerance" type="number" value="15" min="0.1" max="500" step="0.5" />
-              <label for="track-edge-audit-mm" style="margin-top: 8px">Edge audit threshold (mm)</label>
-              <input id="track-edge-audit-mm" type="number" value="100" min="1" max="500" step="1" />
-              <label for="track-edge-audit-every" style="margin-top: 8px">Edge audit every N frames</label>
-              <input id="track-edge-audit-every" type="number" value="1000" min="1" max="100000" step="1" />
-              <label for="track-playback-speed" style="margin-top: 8px">Playback speed (×)</label>
+              <fieldset class="tracker-phase" style="margin-top: 0">
+                <legend>1 — Follow recent frames</legend>
+                <label for="track-reappear">Reappearance radius (mm)</label>
+                <input id="track-reappear" type="number" value="50" min="0.5" max="500" step="0.5" />
+                <label for="track-lookback" style="margin-top: 8px">Look back up to N frames</label>
+                <input id="track-lookback" type="number" value="10" min="1" max="30" step="1" />
+              </fieldset>
+              <fieldset class="tracker-phase" style="margin-top: 10px">
+                <legend>2 — Fill unassigned (fingerprint + rescue)</legend>
+                <label for="track-tolerance">Tolerance (mm)</label>
+                <input id="track-tolerance" type="number" value="100" min="0.1" max="500" step="0.5" />
+              </fieldset>
+              <fieldset class="tracker-phase" style="margin-top: 10px">
+                <legend>3 — Edge quality (report only)</legend>
+                <label for="track-edge-warn-mm">Warn if mean edge error exceeds (mm)</label>
+                <input
+                  id="track-edge-warn-mm"
+                  type="number"
+                  value="150"
+                  min="0.1"
+                  max="500"
+                  step="0.5"
+                  placeholder="empty = off"
+                />
+                <p class="hint" style="margin-top: 6px">
+                  Does not remove labels. Flags frames in the run report (red dots on edge-error plots).
+                </p>
+              </fieldset>
+              <label for="track-playback-speed" style="margin-top: 10px">Playback speed (×)</label>
               <input id="track-playback-speed" type="number" value="1" min="0.25" max="500" step="0.25" />
+              <label class="checkbox-row" style="margin-top: 10px">
+                <input type="checkbox" id="camera-follow-track" checked />
+                <span>Auto-center view on point cloud (follow centroid while scrubbing / playing)</span>
+              </label>
               <div class="button-row" style="margin-top: 8px">
                 <button type="button" id="btn-run-tracker" class="primary" disabled>Run tracker</button>
                 <button type="button" id="btn-play-track" disabled>Play</button>
@@ -192,10 +216,10 @@
                 advances (yields every few frames so the UI stays responsive).
               </p>
               <p class="hint" style="margin-top: 8px">
-                The labelled <strong>baseline</strong> frame is seeded from the graph; the solver runs on <strong>all
-                other frames</strong> forward and backward. Set <strong>tolerance</strong>, <strong>edge audit</strong>,
-                and <strong>reappearance</strong> before <strong>Run tracker</strong>. Loading a skeleton updates
-                tolerance fields from the graph’s <code>toleranceMm</code> when present.
+                The <strong>baseline</strong> frame is seeded from the graph; the solver runs on all other frames forward
+                and backward. Phase 1 snaps markers using the last known position within lookback; phase 2 fills gaps;
+                phase 3 only drives plots. Loading a skeleton updates tolerance from the graph’s <code>toleranceMm</code>
+                when present.
               </p>
               <div class="edge-list" id="track-stats" style="margin-top: 8px"></div>
             </div>
@@ -206,20 +230,9 @@
             <div class="panel-block">
               <div class="track-report-summary" id="track-report-summary"></div>
               <p class="hint" style="margin-top: 8px">
-                Aggregates exclude the baseline frame (100% by definition). Charts: full timeline; vertical line = baseline.
+                Aggregates exclude the baseline frame (100% by definition). Charts are in the column on the right; vertical
+                line = baseline; red dots = frame flagged by phase-3 threshold (orange or blue mean edge error).
               </p>
-              <div class="track-chart-wrap">
-                <div class="track-chart-label">Logical assignment rate (%)</div>
-                <canvas id="track-chart-rate" width="560" height="130"></canvas>
-              </div>
-              <div class="track-chart-wrap">
-                <div class="track-chart-label">Unassigned raw detections per frame</div>
-                <canvas id="track-chart-raw" width="560" height="110"></canvas>
-              </div>
-              <div class="track-chart-wrap">
-                <div class="track-chart-label">Missing logical markers per frame</div>
-                <canvas id="track-chart-miss" width="560" height="110"></canvas>
-              </div>
               <label style="margin-top: 10px">Per-frame table</label>
               <div class="track-report-table-wrap">
                 <table class="live-table track-report-table" id="track-per-frame-table">
@@ -271,16 +284,38 @@
           <div>
             <h2>Tracker</h2>
             <div class="panel-block">
-              <label for="track-reappear-live">Reappearance radius (mm)</label>
-              <input id="track-reappear-live" type="number" value="50" min="0.5" max="500" step="0.5" />
-              <label for="track-tolerance-live" style="margin-top: 8px">Tolerance (mm)</label>
-              <input id="track-tolerance-live" type="number" value="15" min="0.1" max="500" step="0.5" />
-              <label for="track-edge-audit-mm-live" style="margin-top: 8px">Edge audit threshold (mm)</label>
-              <input id="track-edge-audit-mm-live" type="number" value="100" min="1" max="500" step="1" />
-              <label for="track-edge-audit-every-live" style="margin-top: 8px">Edge audit every N frames</label>
-              <input id="track-edge-audit-every-live" type="number" value="1000" min="1" max="100000" step="1" />
-              <label for="track-playback-speed-live" style="margin-top: 8px">Playback speed (×)</label>
+              <fieldset class="tracker-phase" style="margin-top: 0">
+                <legend>1 — Follow recent frames</legend>
+                <label for="track-reappear-live">Reappearance radius (mm)</label>
+                <input id="track-reappear-live" type="number" value="50" min="0.5" max="500" step="0.5" />
+                <label for="track-lookback-live" style="margin-top: 8px">Look back up to N frames</label>
+                <input id="track-lookback-live" type="number" value="10" min="1" max="30" step="1" />
+              </fieldset>
+              <fieldset class="tracker-phase" style="margin-top: 10px">
+                <legend>2 — Fill unassigned (fingerprint + rescue)</legend>
+                <label for="track-tolerance-live">Tolerance (mm)</label>
+                <input id="track-tolerance-live" type="number" value="100" min="0.1" max="500" step="0.5" />
+              </fieldset>
+              <fieldset class="tracker-phase" style="margin-top: 10px">
+                <legend>3 — Edge quality (report only)</legend>
+                <label for="track-edge-warn-mm-live">Warn if mean edge error exceeds (mm)</label>
+                <input
+                  id="track-edge-warn-mm-live"
+                  type="number"
+                  value="150"
+                  min="0.1"
+                  max="500"
+                  step="0.5"
+                  placeholder="empty = off"
+                />
+                <p class="hint" style="margin-top: 6px">Same as Track tab; does not remove labels.</p>
+              </fieldset>
+              <label for="track-playback-speed-live" style="margin-top: 10px">Playback speed (×)</label>
               <input id="track-playback-speed-live" type="number" value="1" min="0.25" max="500" step="0.25" />
+              <label class="checkbox-row" style="margin-top: 10px">
+                <input type="checkbox" id="camera-follow-live" checked />
+                <span>Auto-center view on point cloud (follow centroid while scrubbing / playing)</span>
+              </label>
               <div class="button-row" style="margin-top: 8px">
                 <button type="button" id="btn-run-live" class="primary" disabled>Run tracker</button>
                 <button type="button" id="btn-play-live" disabled>Play</button>
@@ -305,9 +340,40 @@
         </div>
       </aside>
 
+      <div class="layout-main">
       <main id="viewport" tabindex="0">
         <div class="status-bar" id="status-bar">Choose a dataset from <code>data/</code> (run <code>npm start</code>).</div>
       </main>
+
+      <aside id="charts-rail" class="charts-rail" aria-label="Tracking run charts">
+        <div class="charts-rail-inner charts-rail-inner--empty">
+          <h2 class="charts-rail-title">Run charts</h2>
+          <p class="hint charts-rail-placeholder">Run the tracker on the Track tab to populate charts.</p>
+          <div class="charts-rail-charts">
+            <div class="track-chart-wrap">
+              <div class="track-chart-label">Logical assignment rate (%)</div>
+              <canvas id="track-chart-rate" width="560" height="130"></canvas>
+            </div>
+            <div class="track-chart-wrap">
+              <div class="track-chart-label">Unassigned raw detections per frame</div>
+              <canvas id="track-chart-raw" width="560" height="110"></canvas>
+            </div>
+            <div class="track-chart-wrap">
+              <div class="track-chart-label">Missing logical markers per frame</div>
+              <canvas id="track-chart-miss" width="560" height="110"></canvas>
+            </div>
+            <div class="track-chart-wrap">
+              <div class="track-chart-label">Mean orange edge length error (mm)</div>
+              <canvas id="track-chart-orange-err" width="560" height="110"></canvas>
+            </div>
+            <div class="track-chart-wrap">
+              <div class="track-chart-label">Mean blue edge length error (mm)</div>
+              <canvas id="track-chart-blue-err" width="560" height="110"></canvas>
+            </div>
+          </div>
+        </div>
+      </aside>
+      </div>
     </div>
 
     <div id="live-dock" class="live-dock hidden" hidden aria-label="Live assignment table">

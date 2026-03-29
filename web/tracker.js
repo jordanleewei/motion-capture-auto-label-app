@@ -90,8 +90,6 @@ function createDiagnosticsPass() {
     bootstrapAssignmentsTotal: 0,
     finalAssignmentsTotal: 0,
     assignmentDeltaVsBootstrapTotal: 0,
-    auditRuns: 0,
-    auditClearsTotal: 0,
     missingLogicalSlotObservations: 0,
     missingWithZeroAssignedNeighbors: 0,
     missingWithAtLeastOneAssignedNeighbor: 0,
@@ -107,10 +105,8 @@ function createDiagnosticsPass() {
  * @param {ReturnType<typeof createDiagnosticsPass>} backward
  * @param {number} numLogical
  * @param {number} framesTracked
- * @param {number} edgeAuditMm
- * @param {number} edgeAuditEveryFrames
  */
-function buildDiagnosticsSummary(forward, backward, numLogical, framesTracked, edgeAuditMm, edgeAuditEveryFrames) {
+function buildDiagnosticsSummary(forward, backward, numLogical, framesTracked) {
   const fFrames = forward.frames || 1;
   const bFrames = backward.frames || 1;
   const fmt = (pass, label) => {
@@ -123,8 +119,7 @@ function buildDiagnosticsSummary(forward, backward, numLogical, framesTracked, e
     const pct0 = miss > 0 ? ((100 * miss0) / miss).toFixed(1) : "0";
     const pctN = miss > 0 ? ((100 * missN) / miss).toFixed(1) : "0";
     return [
-      `${label}: avg carry-forward (same raw index) ≈ ${avgBoot}; avg final assigned ≈ ${avgFinal}; avg (final − carry-forward) ≈ ${avgDelta} (fingerprint refill minus audit clears; can be negative).`,
-      `${label}: audit runs ${pass.auditRuns}, total nodes cleared by audit ${pass.auditClearsTotal}.`,
+      `${label}: avg carry-forward (same raw index) ≈ ${avgBoot}; avg final assigned ≈ ${avgFinal}; avg (final − carry-forward) ≈ ${avgDelta} (fingerprint / rescue fill; can be negative).`,
       `${label}: missing logical slots (sum over frames) ${miss}; of those, ${miss0} (${pct0}%) had zero assigned graph neighbors (fingerprint cannot constrain); ${missN} (${pctN}%) had ≥1 neighbor but still no valid raw point within tolerance.`,
       `${label}: frames with raw point count < numLogical: ${pass.framesWithPointCloudLtLogical}; raw count min ${!Number.isFinite(pass.minRawPointCount) ? "n/a" : pass.minRawPointCount}, max ${pass.maxRawPointCount}, mean ${pass.frames > 0 ? (pass.sumRawPointCount / pass.frames).toFixed(1) : "n/a"}.`,
     ];
@@ -135,7 +130,7 @@ function buildDiagnosticsSummary(forward, backward, numLogical, framesTracked, e
     "• Carry-forward ties identity to the same raw index as the previous frame; if markers reorder in the cloud or indices shift, wrong points are carried and edge errors explode.",
     "• Fingerprint fill only assigns when ≥1 neighbor is already placed and some raw point matches all constraints within tolerance; large empty regions of missing neighbors block recovery.",
     "• Orange angles add arc-length error terms; strict tolerance rejects many candidates even when lengths look fine.",
-    `• Periodic audit removes labels when median incident edge error exceeds ${edgeAuditMm} mm (evaluated every ${edgeAuditEveryFrames} frames); that threshold clears only the worst bodies but can strip large subgraphs.`,
+    "• Edge-length quality is reported in the run report (plots); it does not remove assignments in the tracker.",
     ...fmt(forward, "Forward pass"),
     ...fmt(backward, "Backward pass"),
   ];
@@ -154,17 +149,16 @@ function buildDiagnosticsSummary(forward, backward, numLogical, framesTracked, e
  * @param {{
  *   reappearMm?: number;
  *   toleranceMm?: number;
- *   edgeAuditMm?: number;
- *   edgeAuditEveryFrames?: number;
+ *   followLookbackFrames?: number;
+ *   edgeWarningThresholdMm?: number | null;
  *   yieldEvery?: number;
  *   onYield?: (r: object, meta?: { phase: string; frameIndex?: number }) => void | Promise<void>;
  * }} opts
  */
 export async function runMultiFrameTracker(frames, graph, opts) {
   const reappear = opts.reappearMm != null ? Number(opts.reappearMm) : 50;
-  const tol = opts.toleranceMm != null ? Number(opts.toleranceMm) : 15;
-  const edgeAuditMm = opts.edgeAuditMm != null ? Number(opts.edgeAuditMm) : 100;
-  const edgeAuditEvery = opts.edgeAuditEveryFrames != null ? Math.max(1, Math.floor(opts.edgeAuditEveryFrames)) : 1000;
+  const tol = opts.toleranceMm != null ? Number(opts.toleranceMm) : 100;
+  const lookback = Math.max(1, Math.min(30, Math.floor(opts.followLookbackFrames != null ? Number(opts.followLookbackFrames) : 10)));
   const yieldEvery = opts.yieldEvery != null && opts.yieldEvery > 0 ? Math.floor(opts.yieldEvery) : 2;
   const onYield = opts.onYield;
 
@@ -269,11 +263,24 @@ export async function runMultiFrameTracker(frames, graph, opts) {
   await yieldNow({ phase: "init", frameIndex: b });
 
   /**
+   * Nearest-in-time reference position for logical marker `i` from up to `lookback` already-solved frames.
+   * Forward: f-1, f-2, … backward in time. Backward pass: f+1, f+2, … forward in time.
+   */
+  function refLogicalPosFromHistory(f, i, pass) {
+    for (let k = 1; k <= lookback; k++) {
+      const idx = pass === "forward" ? f - k : f + k;
+      if (idx < 0 || idx >= frames.length) break;
+      const lp = perFrame[idx].logicalPos[i];
+      if (lp != null) return lp;
+    }
+    return null;
+  }
+
+  /**
    * @param {number} f
-   * @param {{ rawForLogical: (number | null)[]; logicalPos: (Vec3 | null)[] }} prev
    * @param {'forward' | 'backward'} pass
    */
-  function processFrame(f, prev, pass) {
+  function processFrame(f, pass) {
     const diag = diagnostics[pass];
     const curPts = frames[f].points;
     const n = curPts.length;
@@ -287,13 +294,12 @@ export async function runMultiFrameTracker(frames, graph, opts) {
     diag.sumRawPointCount += n;
     if (n < numLogical) diag.framesWithPointCloudLtLogical++;
 
-    // 1. Spatial Tracking (The Anchor): Carry forward assignments by finding the nearest
-    // raw point to the *previous* frame's logical position, if it's within reappear distance.
+    // 1. Follow recent frames: nearest raw point to the most recent known logical position (within lookback), within reappear distance.
     let bootstrapCount = 0;
     for (let i = 0; i < numLogical; i++) {
-      const prevPos = prev.logicalPos[i];
+      const prevPos = refLogicalPosFromHistory(f, i, pass);
       if (!prevPos) continue;
-      
+
       let bestR = -1;
       let bestD = Infinity;
       for (let r = 0; r < n; r++) {
@@ -304,7 +310,7 @@ export async function runMultiFrameTracker(frames, graph, opts) {
           bestR = r;
         }
       }
-      
+
       if (bestR !== -1 && bestD <= reappear) {
         bootstrapCount++;
         rawForLogical[i] = bestR;
@@ -314,36 +320,7 @@ export async function runMultiFrameTracker(frames, graph, opts) {
     }
     diag.bootstrapAssignmentsTotal += bootstrapCount;
 
-    // 2. Strict Edge Audit (The Filter): Drop assignments whose incident orange/blue edge length error vs baseline exceeds threshold.
-    // Doing this BEFORE fingerprint fill ensures bad anchors don't poison the recovery.
-    if (f !== b) {
-      const toClear = [];
-      for (let i = 0; i < numLogical; i++) {
-        if (rawForLogical[i] == null) continue;
-        let maxEdgeErr = 0;
-        for (const nb of orangeNeighbors[i]) {
-          if (rawForLogical[nb.j] == null) continue;
-          const d = dist(logicalPos[i], logicalPos[nb.j]);
-          maxEdgeErr = Math.max(maxEdgeErr, Math.abs(d - nb.d0));
-        }
-        for (const nb of blueNeighbors[i]) {
-          if (rawForLogical[nb.j] == null) continue;
-          const d = dist(logicalPos[i], logicalPos[nb.j]);
-          maxEdgeErr = Math.max(maxEdgeErr, Math.abs(d - nb.d0));
-        }
-        if (maxEdgeErr > tol) toClear.push(i);
-      }
-      diag.auditClearsTotal += toClear.length;
-      if (toClear.length > 0) diag.auditRuns++;
-      for (const i of toClear) {
-        const ri = rawForLogical[i];
-        if (ri != null) usedRaw.delete(ri);
-        rawForLogical[i] = null;
-        logicalPos[i] = null;
-      }
-    }
-
-    // 3. Fingerprint Fill (The Hole-Patcher)
+    // 2. Fingerprint fill (unassigned logicals)
     function runFingerprintFill() {
       let progress = true;
       while (progress) {
@@ -422,7 +399,7 @@ export async function runMultiFrameTracker(frames, graph, opts) {
 
     runFingerprintFill();
 
-    // 4. Rigid Body Rescue (The Deadlock Breaker):
+    // 3. Rigid-body rescue (unassigned bodies)
     // For completely missing rigid bodies, search the unassigned raw points for a subset 
     // that exactly matches the baseline shape (all orange edges).
     for (const [groupId, indices] of baselineIndicesByGroup.entries()) {
@@ -516,14 +493,14 @@ export async function runMultiFrameTracker(frames, graph, opts) {
   }
 
   for (let f = b + 1; f < frames.length; f++) {
-    processFrame(f, perFrame[f - 1], "forward");
+    processFrame(f, "forward");
     if (yieldEvery > 0 && (f - b) % yieldEvery === 0) await yieldNow({ phase: "forward", frameIndex: f });
   }
   await yieldNow({ phase: "forward_done", frameIndex: frames.length > 0 ? Math.max(b, frames.length - 1) : b });
 
   let backStep = 0;
   for (let f = b - 1; f >= 0; f--) {
-    processFrame(f, perFrame[f + 1], "backward");
+    processFrame(f, "backward");
     backStep++;
     if (yieldEvery > 0 && backStep % yieldEvery === 0) await yieldNow({ phase: "backward", frameIndex: f });
   }
@@ -541,14 +518,14 @@ export async function runMultiFrameTracker(frames, graph, opts) {
 
   result.stats.lastFrameMatched = matchedLast;
   result.stats.lastFrameMissing = missingLast;
-  result.analytics = computeTrackingAnalytics(frames, { baselineFrameIndex: b, numLogical, perFrame }, graph);
+  result.analytics = computeTrackingAnalytics(frames, { baselineFrameIndex: b, numLogical, perFrame }, graph, {
+    edgeWarningThresholdMm: opts.edgeWarningThresholdMm,
+  });
   result.diagnostics = buildDiagnosticsSummary(
     diagnostics.forward,
     diagnostics.backward,
     numLogical,
-    Math.max(0, frames.length - 1),
-    edgeAuditMm,
-    edgeAuditEvery
+    Math.max(0, frames.length - 1)
   );
 
   await yieldNow({ phase: "complete" });
@@ -559,8 +536,14 @@ export async function runMultiFrameTracker(frames, graph, opts) {
  * Per-frame and summary metrics for the full run (baseline is the seeded frame, excluded from aggregates).
  * @param {FrameRow[]} frames
  * @param {{ baselineFrameIndex: number; numLogical: number; perFrame: { rawForLogical: (number | null)[] }[] }} result
+ * @param {object | null} graph
+ * @param {{ edgeWarningThresholdMm?: number | null }} [opts]
  */
-export function computeTrackingAnalytics(frames, result, graph) {
+export function computeTrackingAnalytics(frames, result, graph, opts) {
+  const warnTh =
+    opts?.edgeWarningThresholdMm != null && Number.isFinite(Number(opts.edgeWarningThresholdMm))
+      ? Number(opts.edgeWarningThresholdMm)
+      : null;
   const b = result.baselineFrameIndex;
   const n = result.numLogical;
   const baselinePts = frames[b].points;
@@ -673,18 +656,28 @@ export function computeTrackingAnalytics(frames, result, graph) {
       }
     }
 
+    const oLen = orangeLenCount > 0 ? orangeLenErr / orangeLenCount : null;
+    const bLen = blueLenCount > 0 ? blueLenErr / blueLenCount : null;
+    let edgeFlagged = false;
+    if (warnTh != null && warnTh > 0 && fi !== b) {
+      if (oLen != null && oLen > warnTh) edgeFlagged = true;
+      if (bLen != null && bLen > warnTh) edgeFlagged = true;
+    }
+
     return {
       frameIndex: fi,
       fileFrame: row.frame,
       timeSec: row.time,
+      rawPointCount: row.points.length,
       matched,
       missing,
       unassignedRaw,
       rate,
       isBaseline: fi === b,
-      orangeLenErr: orangeLenCount > 0 ? orangeLenErr / orangeLenCount : null,
+      orangeLenErr: oLen,
       orangeAngErr: orangeAngCount > 0 ? orangeAngErr / orangeAngCount : null,
-      blueLenErr: blueLenCount > 0 ? blueLenErr / blueLenCount : null,
+      blueLenErr: bLen,
+      edgeFlagged,
     };
   });
 
@@ -711,6 +704,7 @@ export function computeTrackingAnalytics(frames, result, graph) {
   const totalMissing = nonBaseline.reduce((a, s) => a + s.missing, 0);
   const totalUnassignedRaw = nonBaseline.reduce((a, s) => a + s.unassignedRaw, 0);
   const framesFullAssign = nonBaseline.filter((s) => s.missing === 0).length;
+  const framesEdgeFlagged = nonBaseline.filter((s) => s.edgeFlagged).length;
 
   return {
     frameStats,
@@ -730,6 +724,8 @@ export function computeTrackingAnalytics(frames, result, graph) {
       meanOrangeLengthErrMm: nOrangeLen > 0 ? sumOrangeLen / nOrangeLen : null,
       meanOrangeAngleErrRad: nOrangeAng > 0 ? sumOrangeAng / nOrangeAng : null,
       meanBlueLengthErrMm: nBlueLen > 0 ? sumBlueLen / nBlueLen : null,
+      edgeWarningThresholdMm: warnTh,
+      framesEdgeFlagged,
     },
   };
 }

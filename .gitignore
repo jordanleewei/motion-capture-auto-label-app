@@ -9,6 +9,9 @@ dist/
 data/**/*.tsv
 tol_*.json
 
+# Generated tracker chart HTML (embeds full frame stats; regenerate via npm run track-charts)
+reports/
+
 # OS junk
 .DS_Store
 

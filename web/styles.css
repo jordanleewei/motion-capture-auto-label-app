@@ -63,8 +63,15 @@ body {
 
 .layout {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: 320px minmax(0, 1fr);
   flex: 1;
+  min-height: 0;
+}
+
+.layout-main {
+  display: flex;
+  flex-direction: row;
+  min-width: 0;
   min-height: 0;
 }
 
@@ -135,6 +142,20 @@ body {
   margin-bottom: 4px;
 }
 
+fieldset.tracker-phase {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 0;
+}
+
+fieldset.tracker-phase legend {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 0 6px;
+}
+
 input[type="file"],
 input[type="range"],
 select {
@@ -148,6 +169,21 @@ input[type="number"] {
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text);
+}
+
+label.checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  line-height: 1.35;
+}
+
+label.checkbox-row input {
+  margin-top: 2px;
+  flex-shrink: 0;
 }
 
 textarea.progress-textarea {
@@ -270,6 +306,59 @@ kbd {
 #viewport {
   position: relative;
   min-height: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.charts-rail {
+  flex: 0 0 min(360px, 36vw);
+  min-width: 260px;
+  border-left: 1px solid var(--border);
+  background: var(--panel);
+  padding: 10px 10px 14px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.charts-rail-inner--empty .charts-rail-charts {
+  display: none;
+}
+
+.charts-rail-inner:not(.charts-rail-inner--empty) .charts-rail-placeholder {
+  display: none;
+}
+
+.charts-rail-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  flex: 1;
+}
+
+.charts-rail-inner--empty {
+  min-height: 120px;
+}
+
+.charts-rail-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.charts-rail-placeholder {
+  margin: 0;
+}
+
+.charts-rail-charts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 #viewport:focus {
@@ -492,11 +581,15 @@ kbd {
 .track-chart-wrap canvas {
   display: block;
   width: 100%;
-  max-width: 560px;
+  max-width: 100%;
   height: auto;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: #12151a;
+}
+
+.charts-rail .track-chart-wrap canvas {
+  max-width: 100%;
 }
 
 .track-report-table-wrap {

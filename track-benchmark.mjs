@@ -94,7 +94,7 @@ function buildAssessment(summary, totalMs, frameCount, logicalN) {
 
 /**
  * @param {string} datasetFileName e.g. mar4qualisystrial1.tsv
- * @param {{ reappearMm?: number; toleranceMm?: number; edgeAuditMm?: number; edgeAuditEveryFrames?: number; yieldEvery?: number; logProgress?: boolean }} opts
+ * @param {{ reappearMm?: number; toleranceMm?: number; followLookbackFrames?: number; edgeWarningThresholdMm?: number | null; yieldEvery?: number; logProgress?: boolean; includeFrameStats?: boolean }} opts
  */
 export async function runTrackBenchmark(datasetFileName, opts = {}) {
   const base = safeDataFilename(datasetFileName);
@@ -140,9 +140,15 @@ export async function runTrackBenchmark(datasetFileName, opts = {}) {
   }
 
   const reappearMm = opts.reappearMm != null ? Number(opts.reappearMm) : 50;
-  const toleranceMm = opts.toleranceMm != null ? Number(opts.toleranceMm) : 15;
-  const edgeAuditMm = opts.edgeAuditMm != null ? Number(opts.edgeAuditMm) : 100;
-  const edgeAuditEveryFrames = opts.edgeAuditEveryFrames != null ? Math.max(1, Math.floor(opts.edgeAuditEveryFrames)) : 1000;
+  const toleranceMm = opts.toleranceMm != null ? Number(opts.toleranceMm) : 100;
+  const followLookbackFrames =
+    opts.followLookbackFrames != null ? Math.max(1, Math.min(30, Math.floor(Number(opts.followLookbackFrames)))) : 10;
+  const edgeWarningThresholdMm =
+    opts.edgeWarningThresholdMm === undefined
+      ? 150
+      : opts.edgeWarningThresholdMm === null
+        ? null
+        : Number(opts.edgeWarningThresholdMm);
   const n = frames.length;
   const yieldEvery =
     opts.yieldEvery != null && opts.yieldEvery > 0
@@ -158,8 +164,8 @@ export async function runTrackBenchmark(datasetFileName, opts = {}) {
   const result = await runMultiFrameTracker(frames, graph, {
     reappearMm,
     toleranceMm,
-    edgeAuditMm,
-    edgeAuditEveryFrames,
+    followLookbackFrames,
+    edgeWarningThresholdMm,
     yieldEvery,
     onYield: async (_r, meta) => {
       const t = performance.now();
@@ -215,8 +221,8 @@ export async function runTrackBenchmark(datasetFileName, opts = {}) {
     yieldIntervalFrames: yieldEvery,
     reappearMm,
     toleranceMm,
-    edgeAuditMm,
-    edgeAuditEveryFrames,
+    followLookbackFrames,
+    edgeWarningThresholdMm,
     lastFrameMatched: result.stats.lastFrameMatched,
     lastFrameMissing: result.stats.lastFrameMissing,
     trackingQuality: {
@@ -236,6 +242,9 @@ export async function runTrackBenchmark(datasetFileName, opts = {}) {
 
   const assessment = buildAssessment(summary, totalMs, frames.length, result.numLogical);
 
+  const frameStats =
+    opts.includeFrameStats && result.analytics?.frameStats ? result.analytics.frameStats : undefined;
+
   return {
     ok: true,
     dataset: base,
@@ -244,6 +253,7 @@ export async function runTrackBenchmark(datasetFileName, opts = {}) {
     overall,
     diagnostics: result.diagnostics ?? null,
     assessment,
+    ...(frameStats != null ? { frameStats } : {}),
   };
 }
 

@@ -51,18 +51,18 @@ When the tracker assigns logical markers for a frame, the UI draws:
 If assignments swap identity (e.g., elbow gets assigned where hip should be), the UI will correctly draw “blue shoulder–elbow” as shoulder–hip physically, which looks like incorrect blue connections.
 
 ### Tracker parameters
-The solver consumes these options (units are millimeters):
-- `reappearMm`: how far a raw detection may “reappear” from the previous frame’s logical position
-- `toleranceMm`: geometric tolerance for validating candidate assignments against baseline constraints
-- `edgeAuditMm`: periodic audit threshold on edge fit quality (if too high, labels are cleared)
-- `edgeAuditEveryFrames`: audit frequency
+The solver consumes these options (units are millimeters unless noted):
+- `reappearMm`: how far a raw detection may “reappear” from a recent logical position
+- `followLookbackFrames`: how many past (forward) or future (backward) frames to search for the last known position (1–30)
+- `toleranceMm`: geometric tolerance for fingerprint fill and rigid-body rescue
+- `edgeWarningThresholdMm`: optional; if set, the run report flags frames whose mean orange or blue edge-length error exceeds this (does not change assignments)
 - `yieldEvery`: how often the tracker yields progress to keep the UI responsive (browser only)
 
 Current code defaults (when options are omitted):
 - `reappearMm`: `50`
-- `toleranceMm`: `15`
-- `edgeAuditMm`: `100`
-- `edgeAuditEveryFrames`: `1000`
+- `followLookbackFrames`: `10`
+- `toleranceMm`: `100`
+- `edgeWarningThresholdMm`: `150` (benchmark); UI may use empty field to disable flagging
 - `yieldEvery`: `2`
 
 ## How tracking works (high level)
@@ -75,11 +75,11 @@ Current code defaults (when options are omitted):
    - Runs frame-by-frame assignment from the baseline to the end (`forward`)
    - Runs frame-by-frame assignment from the baseline backward in time (`backward`)
 3. **Per-frame assignment**
-   - **Reappearance step**: reuses raw points that are close to the previous frame’s logical positions within `reappearMm`.
+   - **Follow recent frames**: for each logical marker, find the nearest raw point to the most recent known position within up to `followLookbackFrames` already-solved frames, within `reappearMm`.
    - **Fingerprint fill**: fills remaining logical slots by checking whether candidate raw points satisfy the graph’s constrained edges within `toleranceMm`.
    - **Rigid-body rescue**: when an entire rigid body is missing, tries to recover it by matching a small subset of raw points to the baseline rigid-body shape (then re-runs fingerprint fill).
-4. **Periodic audit**
-   - Every `edgeAuditEveryFrames`, checks edge errors; if the median incident edge error exceeds `edgeAuditMm`, it clears labels in problematic areas to reduce drift / wrong identity propagation.
+4. **Edge quality (report only)**
+   - After the run, analytics compute mean orange/blue edge-length errors per frame. Optional `edgeWarningThresholdMm` flags suspicious frames in the run-report plots (no label stripping in the tracker).
 
 The tracker returns:
 - `result.perFrame[frameIndex]`: for each logical marker, the assigned raw index (`rawForLogical`) and computed logical position (`logicalPos`)
@@ -96,11 +96,10 @@ The tracker returns:
 5. Click **Run tracker**.
 
 ### Relevant UI controls
-Track / Live use these parameter inputs:
-- `Reappearance radius (mm)` (`reappearMm`)
-- `Tolerance (mm)` (`toleranceMm`)
-- `Edge audit threshold (mm)` (`edgeAuditMm`)
-- `Edge audit every N frames` (`edgeAuditEveryFrames`)
+Track / Live group inputs into three phases:
+1. **Follow recent frames**: `reappearMm`, `followLookbackFrames`
+2. **Fill unassigned**: `toleranceMm`
+3. **Edge quality (plots only)**: optional warn threshold for flagging frames in the run report
 
 ## Benchmark / CLI usage
 
@@ -132,9 +131,9 @@ So if the solver ever assigns the elbow logical marker to a hip raw point, the U
 
 Typical causes are:
 - a too-large `toleranceMm` (loose matching allows identity swaps),
-- too-small `reappearMm` (dropping markers too aggressively triggers rescue/incorrect recovery),
+- too-small `reappearMm` or too-small lookback (dropping markers too aggressively triggers rescue/incorrect recovery),
 - heavy occlusion / missing raw detections,
-- audit thresholds that clear too much (then re-fill oscillates).
+- fast motion where a single-frame follow distance is not enough (increase lookback / reappearance).
 
 ## Notes for colleagues
 
@@ -156,13 +155,12 @@ If you want to reproduce debugging behavior and visuals, share:
 4. In the browser app:
    - Load dataset `mar4qualisystrial1.tsv`
    - Load skeleton from `mar4qualisystrial1_labelled_skeleton/mocap-graph.json`
-   - Go to **Track** and set:
-     - `Reappearance radius (mm)`: `50`
-     - `Tolerance (mm)`: `15`
-     - `Edge audit threshold (mm)`: `100`
-     - `Edge audit every N frames`: `1000`
+   - Go to **Track** and set (defaults are fine):
+     - Phase 1: `Reappearance radius (mm)`: `50`, `Look back up to N frames`: `10`
+     - Phase 2: `Tolerance (mm)`: `100`
+     - Phase 3: `Warn if mean edge error exceeds (mm)`: `150` (or clear the field to disable red-dot flags)
    - Click **Run tracker**
 5. Verify behavior:
    - Blue edges only appear for intended logical connections from the saved graph
-   - No full-skeleton flicker during playback/scrubbing
+   - Run report shows orange/blue edge error charts; red dots mark frames flagged by the phase-3 threshold
 

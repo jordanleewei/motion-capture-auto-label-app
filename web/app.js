@@ -252,37 +252,39 @@ function readToleranceMm() {
     const v = Number(document.getElementById(id)?.value);
     if (Number.isFinite(v) && v > 0) return Math.min(500, Math.max(0.1, v));
   }
-  return 15;
-}
-
-/** @returns {number} */
-function readEdgeAuditMm() {
-  const order =
-    activeTab === "live"
-      ? ["track-edge-audit-mm-live", "track-edge-audit-mm"]
-      : activeTab === "track"
-        ? ["track-edge-audit-mm", "track-edge-audit-mm-live"]
-        : ["track-edge-audit-mm", "track-edge-audit-mm-live"];
-  for (const id of order) {
-    const v = Number(document.getElementById(id)?.value);
-    if (Number.isFinite(v) && v > 0) return Math.min(500, Math.max(1, v));
-  }
   return 100;
 }
 
 /** @returns {number} */
-function readEdgeAuditEveryFrames() {
+function readFollowLookbackFrames() {
   const order =
     activeTab === "live"
-      ? ["track-edge-audit-every-live", "track-edge-audit-every"]
+      ? ["track-lookback-live", "track-lookback"]
       : activeTab === "track"
-        ? ["track-edge-audit-every", "track-edge-audit-every-live"]
-        : ["track-edge-audit-every", "track-edge-audit-every-live"];
+        ? ["track-lookback", "track-lookback-live"]
+        : ["track-lookback", "track-lookback-live"];
   for (const id of order) {
     const v = Number(document.getElementById(id)?.value);
-    if (Number.isFinite(v) && v >= 1) return Math.min(100000, Math.max(1, Math.floor(v)));
+    if (Number.isFinite(v) && v >= 1) return Math.min(30, Math.max(1, Math.floor(v)));
   }
-  return 1000;
+  return 10;
+}
+
+/** @returns {number | null} Empty field = no edge-error highlighting. */
+function readEdgeWarningThresholdMm() {
+  const order =
+    activeTab === "live"
+      ? ["track-edge-warn-mm-live", "track-edge-warn-mm"]
+      : activeTab === "track"
+        ? ["track-edge-warn-mm", "track-edge-warn-mm-live"]
+        : ["track-edge-warn-mm", "track-edge-warn-mm-live"];
+  for (const id of order) {
+    const raw = document.getElementById(id)?.value?.trim();
+    if (raw === "" || raw == null) return null;
+    const v = Number(raw);
+    if (Number.isFinite(v) && v > 0) return Math.min(500, Math.max(0.1, v));
+  }
+  return 150;
 }
 
 /**
@@ -329,7 +331,7 @@ function restartPlaybackInterval() {
 /**
  * @param {HTMLCanvasElement | null} canvas
  * @param {number[]} values
- * @param {{ ymin: number; ymax: number; stroke: string; baselineIndex: number | null }} opts
+ * @param {{ ymin: number; ymax: number; stroke: string; baselineIndex: number | null; flags?: boolean[] }} opts
  */
 function paintTimelineChart(canvas, values, opts) {
   if (!canvas || values.length < 2) return;
@@ -349,7 +351,7 @@ function paintTimelineChart(canvas, values, opts) {
   const m = { l: 40, r: 8, t: 8, b: 20 };
   const pw = W - m.l - m.r;
   const ph = H - m.t - m.b;
-  const { ymin, ymax, stroke, baselineIndex } = opts;
+  const { ymin, ymax, stroke, baselineIndex, flags } = opts;
   const span = Math.max(1e-6, ymax - ymin);
   const n = values.length;
 
@@ -375,6 +377,19 @@ function paintTimelineChart(canvas, values, opts) {
   }
   ctx.stroke();
 
+  if (flags && flags.length === n) {
+    ctx.fillStyle = "rgba(255, 90, 90, 0.95)";
+    for (let i = 0; i < n; i++) {
+      if (!flags[i]) continue;
+      const x = m.l + (n === 1 ? pw / 2 : (i / (n - 1)) * pw);
+      const v = Math.min(ymax, Math.max(ymin, values[i]));
+      const y = m.t + ph * (1 - (v - ymin) / span);
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
   if (baselineIndex != null && baselineIndex >= 0 && baselineIndex < n) {
     const x = m.l + (n === 1 ? pw / 2 : (baselineIndex / (n - 1)) * pw);
     ctx.strokeStyle = "rgba(255,255,255,0.35)";
@@ -399,6 +414,7 @@ function clearTrackingReport() {
     rep.classList.add("hidden");
     rep.hidden = true;
   }
+  document.querySelector(".charts-rail-inner")?.classList.add("charts-rail-inner--empty");
   document.getElementById("track-per-frame-tbody")?.replaceChildren();
   const note = document.getElementById("track-report-table-note");
   if (note) note.textContent = "";
@@ -415,11 +431,16 @@ function renderTrackingReport(analytics) {
     rep.classList.remove("hidden");
     rep.hidden = false;
   }
+  document.querySelector(".charts-rail-inner")?.classList.remove("charts-rail-inner--empty");
 
   const s = analytics.summary;
   const sm = document.getElementById("track-report-summary");
   if (sm) {
     const worstRow = s.worstFrameIndex != null ? s.worstFrameIndex + 1 : "—";
+    const warn =
+      s.edgeWarningThresholdMm != null
+        ? `${s.edgeWarningThresholdMm} mm (orange or blue mean edge error)`
+        : "off (set Phase 3 threshold)";
     sm.innerHTML = `<dl>
       <dt>Frames (total / tracked excl. baseline)</dt><dd>${s.framesTotal} / ${s.framesTracked}</dd>
       <dt>Logical markers</dt><dd>${s.logicalMarkers}</dd>
@@ -428,6 +449,8 @@ function renderTrackingReport(analytics) {
       <dt>Frames with all logical assigned</dt><dd>${s.framesWithAllLogicalAssigned} / ${s.framesTracked}</dd>
       <dt>Σ logical misses</dt><dd>${s.totalLogicalMisses}</dd>
       <dt>Σ unassigned raw</dt><dd>${s.totalUnassignedRawDetections}</dd>
+      <dt>Edge warn threshold</dt><dd>${warn}</dd>
+      <dt>Frames flagged (edge quality)</dt><dd>${s.framesEdgeFlagged ?? 0} / ${s.framesTracked}</dd>
     </dl>`;
   }
 
@@ -435,6 +458,9 @@ function renderTrackingReport(analytics) {
   const rates = fs.map((x) => x.rate);
   const raws = fs.map((x) => x.unassignedRaw);
   const misses = fs.map((x) => x.missing);
+  const orangeErr = fs.map((x) => (x.orangeLenErr != null ? x.orangeLenErr : 0));
+  const blueErr = fs.map((x) => (x.blueLenErr != null ? x.blueLenErr : 0));
+  const edgeFlags = fs.map((x) => Boolean(x.edgeFlagged));
   const b = s.baselineFrameIndex;
 
   paintTimelineChart(document.getElementById("track-chart-rate"), rates, {
@@ -456,6 +482,22 @@ function renderTrackingReport(analytics) {
     ymax: maxMiss * 1.08,
     stroke: "#e57373",
     baselineIndex: b,
+  });
+  const maxO = Math.max(0.1, ...orangeErr, 0);
+  paintTimelineChart(document.getElementById("track-chart-orange-err"), orangeErr, {
+    ymin: 0,
+    ymax: maxO * 1.1,
+    stroke: "#ff9800",
+    baselineIndex: b,
+    flags: edgeFlags,
+  });
+  const maxB = Math.max(0.1, ...blueErr, 0);
+  paintTimelineChart(document.getElementById("track-chart-blue-err"), blueErr, {
+    ymin: 0,
+    ymax: maxB * 1.1,
+    stroke: "#42a5f5",
+    baselineIndex: b,
+    flags: edgeFlags,
   });
 
   const tbody = document.getElementById("track-per-frame-tbody");
@@ -663,8 +705,8 @@ async function runTrackerAndVisualize() {
   syncFrameSliders();
   const reappear = readReappearMm();
   const toleranceMm = readToleranceMm();
-  const edgeAuditMm = readEdgeAuditMm();
-  const edgeAuditEveryFrames = readEdgeAuditEveryFrames();
+  const followLookbackFrames = readFollowLookbackFrames();
+  const edgeWarningThresholdMm = readEdgeWarningThresholdMm();
   const b = Math.min(Math.max(0, trackState.graph.baselineFrameIndex ?? 0), state.frames.length - 1);
   if (state.frames[b].points.length === 0) {
     trackState.trackingInProgress = false;
@@ -684,8 +726,8 @@ async function runTrackerAndVisualize() {
     trackState.result = await runMultiFrameTracker(state.frames, trackState.graph, {
       reappearMm: reappear,
       toleranceMm,
-      edgeAuditMm,
-      edgeAuditEveryFrames,
+      followLookbackFrames,
+      edgeWarningThresholdMm,
       yieldEvery: 2,
       onYield: async (r) => {
         trackState.result = r;
@@ -755,6 +797,8 @@ function rebuildTrackPoints(frameIndex) {
     controls.target.copy(c);
     controls.update();
     state.cameraFitted = true;
+  } else if (state.cameraFitted && readCameraFollowEnabled() && row.points.length) {
+    applyCentroidCameraFollow(row.points);
   }
 
   const graph = trackState.graph;
@@ -903,6 +947,25 @@ function centerOfPoints(points) {
   for (const p of points) s.add(new THREE.Vector3(p.x, p.y, p.z));
   s.multiplyScalar(1 / points.length);
   return s;
+}
+
+/** Orbit target + camera move together so rotation/zoom are preserved while the cloud stays centered. */
+function applyCentroidCameraFollow(points) {
+  if (!camera || !controls) return;
+  if (!points.length) return;
+  const c = centerOfPoints(points);
+  const delta = c.clone().sub(controls.target);
+  if (delta.lengthSq() < 1e-12) return;
+  camera.position.add(delta);
+  controls.target.copy(c);
+  controls.update();
+}
+
+function readCameraFollowEnabled() {
+  const id = activeTab === "live" ? "camera-follow-live" : "camera-follow-track";
+  const el = document.getElementById(id);
+  if (el) return Boolean(el.checked);
+  return false;
 }
 
 function initThree(container) {
@@ -1343,6 +1406,8 @@ function syncUi() {
         controls.target.copy(c);
         controls.update();
         state.cameraFitted = true;
+      } else if (row?.points.length && state.cameraFitted && readCameraFollowEnabled()) {
+        applyCentroidCameraFollow(row.points);
       }
       if (row?.points.length) {
         row.points.forEach((p) => {

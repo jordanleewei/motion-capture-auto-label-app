@@ -6,6 +6,7 @@
     "start": "node server.mjs",
     "restart": "bash restart-server.sh",
     "test-api": "node test-api.mjs",
-    "track-bench": "node track-benchmark.mjs"
+    "track-bench": "node track-benchmark.mjs",
+    "track-charts": "node track-charts.mjs"
   }
 }
