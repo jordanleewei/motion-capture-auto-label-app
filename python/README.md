@@ -2,6 +2,15 @@
 
 A pure-Python reimplementation of the motion-capture marker auto-labelling tracker, designed for use in Jupyter notebooks.
 
+**Terminology**
+
+| Term | Meaning |
+|------|--------|
+| **Graph marker** | A fixed identity in the skeleton (`mocap-graph.json`); one index per marker in the model. |
+| **Raw** | A 3D detection in the current TSV row (indices `0…n−1` are not stable identities across frames). |
+| **`raw_index_by_graph_marker[i]`** | For graph marker `i`, which raw row index it uses this frame, or `None`. |
+| **`reference_position_for_follow`** | Last known 3D position of marker `i` from recent solved frames — anchor for the **follow** step. |
+
 ## Quick start
 
 ```bash
@@ -19,11 +28,15 @@ jupyter notebook mocap_tracker.ipynb
 
 ## Regenerating the notebook
 
-If you edit `mocap_tracker.py`, regenerate the `.ipynb` with:
+If you edit `mocap_tracker.py`, regenerate the `.ipynb` while **keeping existing notebook outputs**
+(where possible):
 
 ```bash
-jupytext --to ipynb mocap_tracker.py -o mocap_tracker.ipynb
+cd python
+jupytext --to ipynb mocap_tracker.py -o mocap_tracker.ipynb --update
 ```
+
+Without `--update`, the `.ipynb` is fully replaced and cell outputs are cleared.
 
 Or sync both ways:
 

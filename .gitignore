@@ -12,3 +12,7 @@ tol_*.json
 # OS junk
 .DS_Store
 
+# Python / Jupyter
+python/__pycache__/
+python/.ipynb_checkpoints/
+
