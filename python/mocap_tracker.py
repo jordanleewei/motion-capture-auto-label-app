@@ -915,7 +915,149 @@ plt.tight_layout()
 plt.show()
 
 # %% [markdown]
-# ## 13. Chart — Orange angle error over time
+# ## 13. Skeleton snapshots — high mean edge length error (> 50 mm)
+#
+# Nine frames **spread across the clip** among those where **mean** orange or blue edge length
+# error exceeds **50 mm** (non-baseline). If fewer than nine frames qualify, we fill with the
+# next-worst frames by max mean edge error and note it in the printout.
+
+# %%
+EDGE_LEN_VIZ_THRESHOLD_MM = 50.0
+
+
+def _max_mean_edge_len_err(s: FrameStats) -> float:
+    vals = []
+    if s.orange_len_err is not None:
+        vals.append(s.orange_len_err)
+    if s.blue_len_err is not None:
+        vals.append(s.blue_len_err)
+    return max(vals) if vals else -1.0
+
+
+def _pick_high_edge_frames(
+    stats: list[FrameStats],
+    *,
+    threshold_mm: float,
+    k: int = 9,
+) -> tuple[list[FrameStats], str]:
+    """Up to ``k`` frames with spread across time; prefer mean edge error > ``threshold_mm``."""
+    nb = [s for s in stats if not s.is_baseline]
+    over = [s for s in nb if _max_mean_edge_len_err(s) > threshold_mm]
+    over.sort(key=lambda s: s.frame_index)
+    note = ""
+    if len(over) >= k:
+        idxs = np.linspace(0, len(over) - 1, k, dtype=int)
+        picked = [over[i] for i in idxs]
+        note = f"{len(over):,} frames exceed {threshold_mm:.0f} mm; showing {k} spread across time."
+    elif len(over) > 0:
+        rest = sorted(nb, key=_max_mean_edge_len_err, reverse=True)
+        picked = list(over)
+        for s in rest:
+            if len(picked) >= k:
+                break
+            if s not in picked:
+                picked.append(s)
+        picked = picked[:k]
+        picked.sort(key=lambda s: s.frame_index)
+        note = (
+            f"Only {len(over):,} frames exceed {threshold_mm:.0f} mm; padded to {len(picked)} "
+            f"from next-worst mean edge errors."
+        )
+    else:
+        rest = sorted(nb, key=_max_mean_edge_len_err, reverse=True)
+        picked = rest[:k]
+        note = f"No frames exceed {threshold_mm:.0f} mm; showing top {len(picked)} by max mean edge error."
+
+    return picked, note
+
+
+def _draw_tracked_skeleton_3d(ax, frame_index: int) -> None:
+    """Plot assigned marker positions and orange/blue edges (both endpoints must be assigned)."""
+    pf = per_frame[frame_index]
+    pos = pf.position_by_graph_marker
+    for i in range(num_graph_markers):
+        p = pos[i]
+        if p is not None:
+            ax.scatter(p[0], p[1], p[2], c="#1f2937", s=22, alpha=0.9)
+    for _indices in baseline_groups.values():
+        for _ii in range(len(_indices)):
+            for _jj in range(_ii + 1, len(_indices)):
+                u, v = _indices[_ii], _indices[_jj]
+                pu, pv = pos[u], pos[v]
+                if pu is None or pv is None:
+                    continue
+                ax.plot(
+                    [pu[0], pv[0]], [pu[1], pv[1]], [pu[2], pv[2]],
+                    color="#ea580c", linewidth=1.0, alpha=0.85,
+                )
+    for _seg in graph.get("segmentEdgesBetweenRigidBodies", []):
+        _ia = baseline_groups.get(_seg["groupA"], [])
+        _ib = baseline_groups.get(_seg["groupB"], [])
+        for _u in _ia:
+            for _v in _ib:
+                pu, pv = pos[_u], pos[_v]
+                if pu is None or pv is None:
+                    continue
+                ax.plot(
+                    [pu[0], pv[0]], [pu[1], pv[1]], [pu[2], pv[2]],
+                    color="#2563eb", linewidth=0.7, alpha=0.45,
+                )
+    finite = [pos[i] for i in range(num_graph_markers) if pos[i] is not None]
+    if finite:
+        arr = np.stack(finite, axis=0)
+        _mr = float(np.ptp(arr, axis=0).max()) / 2.0
+        if _mr > 0:
+            mid = arr.mean(axis=0)
+            ax.set_xlim(mid[0] - _mr, mid[0] + _mr)
+            ax.set_ylim(mid[1] - _mr, mid[1] + _mr)
+            ax.set_zlim(mid[2] - _mr, mid[2] + _mr)
+    ax.set_xlabel("X (mm)")
+    ax.set_ylabel("Y (mm)")
+    ax.set_zlabel("Z (mm)")
+
+
+picked_stats, _viz_note = _pick_high_edge_frames(
+    frame_stats, threshold_mm=EDGE_LEN_VIZ_THRESHOLD_MM, k=9,
+)
+print(_viz_note)
+if picked_stats:
+    for _s in picked_stats:
+        o = _s.orange_len_err
+        b = _s.blue_len_err
+        o_str = f"{o:.1f}" if o is not None else "—"
+        b_str = f"{b:.1f}" if b is not None else "—"
+        print(
+            f"  frame_index={_s.frame_index:>7}  file_frame={_s.file_frame:>7}  t={_s.time_sec:>8.3f}s  "
+            f"O_mean={o_str:>6} mm  B_mean={b_str:>6} mm",
+        )
+
+    _n = len(picked_stats)
+    fig_sk9, axes_sk9 = plt.subplots(3, 3, figsize=(14, 12), subplot_kw={"projection": "3d"})
+    for _ax, _s in zip(axes_sk9.flat, picked_stats):
+        _draw_tracked_skeleton_3d(_ax, _s.frame_index)
+        o = _s.orange_len_err
+        b = _s.blue_len_err
+        o_str = f"{o:.1f}" if o is not None else "—"
+        b_str = f"{b:.1f}" if b is not None else "—"
+        _ax.set_title(
+            f"fi={_s.frame_index}  t={_s.time_sec:.2f}s\nO={o_str}  B={b_str} mm",
+            fontsize=8,
+        )
+    for _ax in axes_sk9.flat[_n:]:
+        _ax.set_axis_off()
+    plt.suptitle(
+        f"Tracked skeleton — mean edge length error (orange / blue), pick > {EDGE_LEN_VIZ_THRESHOLD_MM:.0f} mm "
+        f"(see printout if padded)",
+        fontsize=11,
+        y=1.02,
+    )
+    plt.tight_layout()
+    plt.show()
+else:
+    print("(No frames to plot — need at least one non-baseline frame.)")
+
+# %% [markdown]
+# ## 14. Chart — Orange angle error over time
 #
 # Mean angular deviation (degrees) of intra-rigid-body marker triangles from their
 # baseline geometry. Spikes indicate identity swaps or deformation.
@@ -939,7 +1081,7 @@ plt.tight_layout()
 plt.show()
 
 # %% [markdown]
-# ## 14. Pass diagnostics
+# ## 15. Pass diagnostics
 #
 # Printed stats for the forward and backward passes: average follow assignments, final
 # counts, how much fingerprint/rescue added beyond follow, and missing-slot breakdown.
@@ -974,4 +1116,5 @@ print_diagnostics("Backward pass", diag_bwd)
 #
 # Adjust `REAPPEAR_MM`, `TOLERANCE_MM`, `FOLLOW_LOOKBACK_FRAMES`, and
 # `EDGE_WARNING_THRESHOLD_MM` in **§1** to tune behaviour; use `MAX_FRAMES` in **§7** for
-# faster experiments on a prefix of the clip.
+# faster experiments on a prefix of the clip. Skeleton snapshots (**§13**) use
+# `EDGE_LEN_VIZ_THRESHOLD_MM` for picking high-error frames.
